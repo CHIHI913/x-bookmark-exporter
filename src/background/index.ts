@@ -95,7 +95,7 @@ async function handleMessage(
   }
 }
 
-const DEFAULT_COUNT = 20;
+const DEFAULT_COUNT = 10;
 
 async function handleBookmarksReceived(payload: { posts: Post[] }): Promise<void> {
   let { posts } = payload;
