@@ -1,6 +1,8 @@
 import { AutoScroller } from './scroller';
 import { CaptureOptions } from '@/lib/types';
 
+let scroller: AutoScroller | null = null;
+
 // MAIN worldスクリプトを外部ファイルとして注入
 function injectScript(): void {
   console.log('[X Bookmark Exporter][Content] Injecting MAIN world script...');
@@ -25,10 +27,17 @@ function injectScript(): void {
 injectScript();
 console.log('[X Bookmark Exporter][Content] Content script initialized');
 
-// ブックマークページの場合、読み込み時にデータをクリア
+// ブックマークページの場合、キャプチャ状態を確認して自動開始
 if (window.location.pathname.includes('/i/bookmarks')) {
-  chrome.runtime.sendMessage({ type: 'CLEAR_DATA' }, () => {
-    console.log('[X Bookmark Exporter][Content] Data cleared on page load');
+  chrome.runtime.sendMessage({ type: 'GET_CAPTURE_STATUS' }, (response) => {
+    if (response?.isCapturing && response?.options) {
+      console.log('[X Bookmark Exporter][Content] Resuming capture after reload...');
+      // 少し待ってからスクロール開始（ページ読み込み完了を待つ）
+      setTimeout(() => {
+        scroller = new AutoScroller(response.options);
+        scroller.start();
+      }, 2000);
+    }
   });
 }
 
@@ -48,8 +57,6 @@ window.addEventListener('message', (event) => {
     console.log('[X Bookmark Exporter][Content] Service Worker response:', response);
   });
 });
-
-let scroller: AutoScroller | null = null;
 
 // Service Workerからのコマンドを受信
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -71,16 +78,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 async function startCapture(options: CaptureOptions) {
   console.log('[X Bookmark Exporter][Content] Starting capture with options:', options);
 
-  // ブックマークページに移動（必要な場合）
+  // ブックマークページでない場合は移動
   if (!window.location.pathname.includes('/i/bookmarks')) {
     console.log('[X Bookmark Exporter][Content] Navigating to bookmarks page...');
     window.location.href = 'https://x.com/i/bookmarks';
     return;
   }
 
-  // 自動スクロール開始
-  scroller = new AutoScroller(options);
-  await scroller.start();
+  // ブックマークページの場合はリロードしてAPIを再取得
+  console.log('[X Bookmark Exporter][Content] Reloading to fetch bookmarks...');
+  window.location.reload();
 }
 
 function stopCapture() {

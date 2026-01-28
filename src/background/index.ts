@@ -95,20 +95,24 @@ async function handleMessage(
   }
 }
 
-const DEFAULT_COUNT = 10;
-
 async function handleBookmarksReceived(payload: { posts: Post[] }): Promise<void> {
   let { posts } = payload;
   console.log('[X Bookmark Exporter][SW] Received posts count:', posts?.length);
+
+  // キャプチャ中でなければ無視
+  if (!state.isActive()) {
+    console.log('[X Bookmark Exporter][SW] Not capturing, skipping');
+    return;
+  }
 
   if (!posts || posts.length === 0) {
     console.log('[X Bookmark Exporter][SW] No posts to save');
     return;
   }
 
-  // 件数制限を適用（デフォルト10件）
+  // 件数制限を適用
   const options = state.getOptions();
-  const targetCount = (options?.mode === 'count' && options.count) ? options.count : DEFAULT_COUNT;
+  const targetCount = (options?.mode === 'count' && options.count) ? options.count : 20;
   const currentCount = store.getCount();
   const remaining = targetCount - currentCount;
 
