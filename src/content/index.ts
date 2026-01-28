@@ -2,9 +2,12 @@ import { AutoScroller } from './scroller';
 import { CaptureOptions } from '@/lib/types';
 
 let scroller: AutoScroller | null = null;
+let hookInjected = false;
 
 // MAIN worldスクリプトを外部ファイルとして注入
 function injectScript(): void {
+  if (hookInjected) return;
+
   console.log('[X Bookmark Exporter][Content] Injecting MAIN world script...');
 
   const script = document.createElement('script');
@@ -14,25 +17,23 @@ function injectScript(): void {
   script.onload = () => {
     console.log('[X Bookmark Exporter][Content] MAIN world script loaded');
     script.remove();
+    hookInjected = true;
   };
 
   script.onerror = (e) => {
     console.error('[X Bookmark Exporter][Content] Failed to load MAIN world script:', e);
   };
 
-  // document_startで実行されるため、documentElementに追加
   (document.head || document.documentElement).appendChild(script);
 }
 
-injectScript();
-console.log('[X Bookmark Exporter][Content] Content script initialized');
-
-// ブックマークページの場合、キャプチャ状態を確認して自動開始
+// ブックマークページの場合、キャプチャ状態を確認
 if (window.location.pathname.includes('/i/bookmarks')) {
   chrome.runtime.sendMessage({ type: 'GET_CAPTURE_STATUS' }, (response) => {
     if (response?.isCapturing && response?.options) {
       console.log('[X Bookmark Exporter][Content] Resuming capture after reload...');
-      // 少し待ってからスクロール開始（ページ読み込み完了を待つ）
+      // hookを注入してスクロール開始
+      injectScript();
       setTimeout(() => {
         scroller = new AutoScroller(response.options);
         scroller.start();
@@ -85,7 +86,7 @@ async function startCapture(options: CaptureOptions) {
     return;
   }
 
-  // ブックマークページの場合はリロードしてAPIを再取得
+  // hookを注入してリロード（リロード後にキャプチャ再開）
   console.log('[X Bookmark Exporter][Content] Reloading to fetch bookmarks...');
   window.location.reload();
 }
