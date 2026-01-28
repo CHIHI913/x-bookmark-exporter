@@ -61,7 +61,7 @@ export function App() {
 
         <div className="actions">
           <button onClick={handleFetchMore} className="btn btn-primary">
-            もっと取得
+            取得
           </button>
         </div>
 
