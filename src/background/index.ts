@@ -96,53 +96,14 @@ async function handleMessage(
 }
 
 async function handleBookmarksReceived(payload: { posts: Post[] }): Promise<void> {
-  let { posts } = payload;
-  console.log('[X Bookmark Exporter][SW] Received posts count:', posts?.length);
-
-  // キャプチャ中でなければ無視
-  if (!state.isActive()) {
-    console.log('[X Bookmark Exporter][SW] Not capturing, skipping');
-    return;
-  }
+  const { posts } = payload;
 
   if (!posts || posts.length === 0) {
-    console.log('[X Bookmark Exporter][SW] No posts to save');
     return;
-  }
-
-  // 件数制限を適用
-  const options = state.getOptions();
-  const targetCount = (options?.mode === 'count' && options.count) ? options.count : 20;
-  const currentCount = store.getCount();
-  const remaining = targetCount - currentCount;
-
-  if (remaining <= 0) {
-    console.log('[X Bookmark Exporter][SW] Target count reached, skipping');
-    return;
-  }
-
-  if (posts.length > remaining) {
-    posts = posts.slice(0, remaining);
-    console.log('[X Bookmark Exporter][SW] Limited to:', posts.length);
   }
 
   // 重複を除いて保存
-  const newPosts = store.addBookmarks(posts);
-  console.log('[X Bookmark Exporter][SW] New posts saved:', newPosts.length);
-
-  // 状態更新
-  state.addCaptured(newPosts.length);
-
-  const currentStatus = state.getStatus();
-  console.log('[X Bookmark Exporter][SW] Current status after save:', currentStatus);
-
-  // Popupに進捗通知
-  chrome.runtime
-    .sendMessage({
-      type: 'CAPTURE_PROGRESS',
-      payload: currentStatus,
-    })
-    .catch(() => {}); // Popupが閉じている場合は無視
+  store.addBookmarks(posts);
 }
 
 async function handleStartCapture(options: CaptureOptions): Promise<void> {

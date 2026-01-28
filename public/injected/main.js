@@ -2,8 +2,6 @@
 (function() {
   'use strict';
 
-  console.log('[X Bookmark Exporter][MAIN] Injecting hooks...');
-
   // Bookmarks APIのURLパターン
   const BOOKMARKS_API_PATTERN = /\/graphql\/.+\/Bookmarks/;
 
@@ -22,24 +20,19 @@
 
     // デバッグ: GraphQLリクエストをログ
     if (url.includes('/graphql/')) {
-      console.log('[X Bookmark Exporter][MAIN] XHR GraphQL request:', url.substring(0, 100));
     }
 
     // Bookmarks APIの場合のみ処理
     if (BOOKMARKS_API_PATTERN.test(url)) {
-      console.log('[X Bookmark Exporter][MAIN] XHR Bookmarks API detected!', url);
 
       const originalOnReadyStateChange = xhr.onreadystatechange;
 
       xhr.onreadystatechange = function() {
         if (xhr.readyState === 4 && xhr.status === 200) {
           try {
-            console.log('[X Bookmark Exporter][MAIN] XHR response received, status:', xhr.status);
             const json = JSON.parse(xhr.responseText);
-            console.log('[X Bookmark Exporter][MAIN] XHR Response JSON keys:', Object.keys(json));
 
             const posts = parseBookmarksResponse(json);
-            console.log('[X Bookmark Exporter][MAIN] XHR Parsed posts count:', posts.length);
 
             if (posts.length > 0) {
               window.postMessage(
@@ -49,12 +42,9 @@
                 },
                 '*'
               );
-              console.log('[X Bookmark Exporter][MAIN] XHR ' + posts.length + ' posts sent to content script');
             } else {
-              console.log('[X Bookmark Exporter][MAIN] XHR No posts found in response');
             }
           } catch (error) {
-            console.error('[X Bookmark Exporter][MAIN] XHR Parse error:', error);
           }
         }
 
@@ -67,7 +57,6 @@
     return originalXHRSend.apply(this, arguments);
   };
 
-  console.log('[X Bookmark Exporter][MAIN] XMLHttpRequest hook installed');
 
   // ===== fetch フック =====
   const originalFetch = window.fetch;
@@ -77,18 +66,14 @@
     const url = args[0] instanceof Request ? args[0].url : String(args[0]);
 
     if (url.includes('/graphql/')) {
-      console.log('[X Bookmark Exporter][MAIN] Fetch GraphQL request:', url.substring(0, 100));
     }
 
     if (BOOKMARKS_API_PATTERN.test(url)) {
-      console.log('[X Bookmark Exporter][MAIN] Fetch Bookmarks API detected!', url);
       try {
         const clone = response.clone();
         const json = await clone.json();
-        console.log('[X Bookmark Exporter][MAIN] Fetch Response JSON keys:', Object.keys(json));
 
         const posts = parseBookmarksResponse(json);
-        console.log('[X Bookmark Exporter][MAIN] Fetch Parsed posts count:', posts.length);
 
         if (posts.length > 0) {
           window.postMessage(
@@ -98,36 +83,26 @@
             },
             '*'
           );
-          console.log('[X Bookmark Exporter][MAIN] Fetch ' + posts.length + ' posts sent to content script');
         }
       } catch (error) {
-        console.error('[X Bookmark Exporter][MAIN] Fetch Parse error:', error);
       }
     }
 
     return response;
   };
 
-  console.log('[X Bookmark Exporter][MAIN] Fetch hook installed');
 
   // ===== パーサー関数 =====
   function parseBookmarksResponse(json) {
-    console.log('[X Bookmark Exporter][MAIN] Parsing response...');
-    console.log('[X Bookmark Exporter][MAIN] json.data exists:', !!json.data);
-    console.log('[X Bookmark Exporter][MAIN] bookmark_timeline_v2 exists:', !!json.data?.bookmark_timeline_v2);
 
     const instructions = json.data?.bookmark_timeline_v2?.timeline?.instructions ?? [];
-    console.log('[X Bookmark Exporter][MAIN] Instructions count:', instructions.length);
-    console.log('[X Bookmark Exporter][MAIN] Instruction types:', instructions.map(function(i) { return i.type; }));
 
     const addEntriesInstruction = instructions.find(function(inst) { return inst.type === 'TimelineAddEntries'; });
 
     if (!addEntriesInstruction?.entries) {
-      console.log('[X Bookmark Exporter][MAIN] No entries found in TimelineAddEntries');
       return [];
     }
 
-    console.log('[X Bookmark Exporter][MAIN] Entries count:', addEntriesInstruction.entries.length);
 
     const posts = [];
 
@@ -156,7 +131,6 @@
         const normalized = normalizePost(post, sortIndex);
         if (normalized) {
           posts.push(normalized);
-          console.log('[X Bookmark Exporter][MAIN] Added post:', normalized.id, 'sortIndex:', sortIndex, 'text:', normalized.text.substring(0, 30));
         }
       }
     }
@@ -191,7 +165,6 @@
         media: extractMedia(raw),
       };
     } catch (e) {
-      console.error('[X Bookmark Exporter][MAIN] Failed to normalize post:', e);
       return null;
     }
   }
@@ -217,7 +190,6 @@
       }
       return null;
     } catch (e) {
-      console.error('[X Bookmark Exporter][MAIN] Failed to extract quoted URL:', e);
       return null;
     }
   }
@@ -242,5 +214,4 @@
       .sort(function(a, b) { return (b.bitrate ?? 0) - (a.bitrate ?? 0); })[0]?.url ?? '';
   }
 
-  console.log('[X Bookmark Exporter][MAIN] All hooks installed successfully');
 })();
