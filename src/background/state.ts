@@ -1,4 +1,4 @@
-import { db } from '@/lib/db';
+import { store } from '@/lib/store';
 import { CaptureOptions, CaptureStatus } from '@/lib/types';
 
 export class CaptureState {
@@ -20,20 +20,29 @@ export class CaptureState {
     this.capturedCount += count;
   }
 
+  getOptions(): CaptureOptions | null {
+    return this.options;
+  }
+
+  getCapturedCount(): number {
+    return this.capturedCount;
+  }
+
+  isActive(): boolean {
+    return this.isCapturing;
+  }
+
   reset(): void {
     this.isCapturing = false;
     this.capturedCount = 0;
     this.options = null;
   }
 
-  async getStatus(): Promise<CaptureStatus> {
-    const oldestDate = await db.getOldestBookmarkDate();
-    const totalCount = await db.getBookmarkCount();
-
+  getStatus(): CaptureStatus {
     return {
       isCapturing: this.isCapturing,
-      count: totalCount,
-      oldestDate,
+      count: store.getCount(),
+      oldestDate: store.getOldestDate(),
       options: this.options,
     };
   }

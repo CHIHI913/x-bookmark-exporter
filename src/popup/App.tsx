@@ -6,8 +6,10 @@ import { CaptureOptions, CaptureStatus } from '@/lib/types';
 export function App() {
   const [status, setStatus] = useState<CaptureStatus | null>(null);
   const [options, setOptions] = useState<CaptureOptions>({
-    mode: 'all',
+    mode: 'count',
+    count: 10,
   });
+  const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
     // 初期状態を取得
@@ -39,17 +41,21 @@ export function App() {
     setStatus((prev) => (prev ? { ...prev, isCapturing: false } : prev));
   };
 
-  const handleExport = (format: 'csv' | 'markdown') => {
-    chrome.runtime.sendMessage({ type: 'EXPORT', payload: { format } });
+  const handleExport = async (format: 'csv' | 'markdown') => {
+    chrome.runtime.sendMessage({ type: 'EXPORT', payload: { format } }, async (response) => {
+      if (response?.clipboard && response?.content) {
+        try {
+          await navigator.clipboard.writeText(response.content);
+          setMessage(`${response.count}件をクリップボードにコピーしました`);
+        } catch (error) {
+          console.error('Clipboard error:', error);
+          setMessage('クリップボードへのコピーに失敗しました');
+        }
+        setTimeout(() => setMessage(null), 3000);
+      }
+    });
   };
 
-  const handleClear = () => {
-    if (confirm('取得済みデータを全て削除しますか？')) {
-      chrome.runtime.sendMessage({ type: 'CLEAR_DATA' }, () => {
-        setStatus((prev) => (prev ? { ...prev, count: 0, oldestDate: null } : prev));
-      });
-    }
-  };
 
   return (
     <div className="popup">
@@ -86,23 +92,19 @@ export function App() {
               disabled={!status?.count}
               className="btn btn-secondary"
             >
-              CSV
+              CSV (ダウンロード)
             </button>
             <button
               onClick={() => handleExport('markdown')}
               disabled={!status?.count}
               className="btn btn-secondary"
             >
-              Markdown
+              Markdown (コピー)
             </button>
           </div>
+          {message && <p className="message">{message}</p>}
         </div>
 
-        <div className="clear-section">
-          <button onClick={handleClear} className="btn btn-text" disabled={!status?.count}>
-            データをクリア
-          </button>
-        </div>
       </main>
     </div>
   );

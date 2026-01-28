@@ -7,33 +7,31 @@ export function exportToMarkdown(bookmarks: Post[]): string {
     `エクスポート日時: ${new Date().toLocaleString('ja-JP')}`,
     `件数: ${bookmarks.length}`,
     '',
+    '| ユーザーID | ユーザー名 | 本文 | 投稿日時 | URL | 引用元 | いいね | RT | imp |',
+    '|------------|------------|------|----------|-----|--------|--------|-----|-----|',
   ];
 
   for (const b of bookmarks) {
-    lines.push(`## @${b.username} - ${b.displayName}`);
-    lines.push('');
-    lines.push(`> ${b.text.replace(/\n/g, '\n> ')}`);
-    lines.push('');
-    lines.push(`- 投稿日時: ${formatDate(b.createdAt)}`);
-    lines.push(`- URL: ${b.url}`);
-    lines.push(
-      `- リポスト: ${b.metrics.reposts} / いいね: ${b.metrics.likes} / リプライ: ${b.metrics.replies}`
-    );
+    const userId = `@${b.username}`;
+    const userName = escapeTable(b.displayName);
+    const text = escapeTable(b.text);
+    const date = formatDate(b.createdAt);
+    const url = b.url;
+    const quoted = b.quotedUrl ?? '';
+    const likes = b.metrics.likes;
+    const reposts = b.metrics.reposts;
+    const views = b.metrics.views;
 
-    if (b.media.length > 0) {
-      lines.push(`- メディア:`);
-      for (const m of b.media) {
-        lines.push(`  - [${m.type}](${m.url})`);
-      }
-    }
-
-    lines.push('');
-    lines.push('---');
-    lines.push('');
+    lines.push(`| ${userId} | ${userName} | ${text} | ${date} | ${url} | ${quoted} | ${likes} | ${reposts} | ${views} |`);
   }
 
   return lines.join('\n');
 }
+
+function escapeTable(text: string): string {
+  return text.replace(/\|/g, '\\|').replace(/\n/g, '<br>');
+}
+
 
 function formatDate(isoString: string): string {
   return new Date(isoString).toLocaleString('ja-JP', {
