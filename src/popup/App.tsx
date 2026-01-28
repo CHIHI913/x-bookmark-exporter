@@ -12,10 +12,15 @@ export function App() {
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    // 初期状態を取得
+    // 初期状態を取得し、データがなければ自動で取得開始
     chrome.runtime.sendMessage({ type: 'GET_CAPTURE_STATUS' }, (response) => {
       if (response) {
         setStatus(response);
+        // データがなく、キャプチャ中でなければ自動開始
+        if (response.count === 0 && !response.isCapturing) {
+          chrome.runtime.sendMessage({ type: 'START_CAPTURE', payload: options });
+          setStatus((prev) => (prev ? { ...prev, isCapturing: true } : prev));
+        }
       }
     });
 
