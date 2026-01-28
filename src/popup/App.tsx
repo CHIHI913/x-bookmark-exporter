@@ -1,8 +1,14 @@
 import { useState, useEffect } from 'preact/hooks';
-import { CaptureStatus } from '@/lib/types';
+import { RangeSelector } from './components/RangeSelector';
+import { Progress } from './components/Progress';
+import { CaptureOptions, CaptureStatus } from '@/lib/types';
 
 export function App() {
   const [status, setStatus] = useState<CaptureStatus | null>(null);
+  const [options, setOptions] = useState<CaptureOptions>({
+    mode: 'count',
+    count: 20,
+  });
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -11,10 +17,25 @@ export function App() {
         setStatus(response);
       }
     });
+
+    // 進捗更新を購読
+    const listener = (message: { type: string; payload?: CaptureStatus }) => {
+      if (message.type === 'CAPTURE_PROGRESS') {
+        if (message.payload) {
+          setStatus(message.payload);
+        }
+      }
+    };
+    chrome.runtime.onMessage.addListener(listener);
+    return () => chrome.runtime.onMessage.removeListener(listener);
   }, []);
 
+  const handleFetchMore = () => {
+    chrome.runtime.sendMessage({ type: 'FETCH_MORE', payload: options });
+  };
+
   const handleExport = async (format: 'csv' | 'markdown') => {
-    chrome.runtime.sendMessage({ type: 'EXPORT', payload: { format } }, async (response) => {
+    chrome.runtime.sendMessage({ type: 'EXPORT', payload: { format, options } }, async (response) => {
       if (response?.clipboard && response?.content) {
         try {
           await navigator.clipboard.writeText(response.content);
@@ -34,11 +55,18 @@ export function App() {
       </header>
 
       <main className="popup-main">
-        <div className="status">
-          <p>取得済み: {status?.count ?? 0}件</p>
+        <RangeSelector value={options} onChange={setOptions} />
+
+        <Progress status={status} />
+
+        <div className="actions">
+          <button onClick={handleFetchMore} className="btn btn-primary">
+            もっと取得
+          </button>
         </div>
 
         <div className="export-section">
+          <h2>エクスポート</h2>
           <div className="export-buttons">
             <button
               onClick={() => handleExport('csv')}

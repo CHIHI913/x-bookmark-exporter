@@ -1,23 +1,11 @@
 import { store } from '@/lib/store';
 import { exportToCsv, exportToMarkdown } from '@/lib/exporter';
-import { CaptureState } from './state';
 import { Post, CaptureOptions } from '@/lib/types';
-
-console.log('[X Bookmark Exporter][SW] Service Worker starting...');
-
-// 状態管理
-const state = new CaptureState();
 
 // メッセージハンドラ登録
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('[X Bookmark Exporter][SW] Received message:', message.type, message.payload);
   handleMessage(message, sender, sendResponse);
-  return true; // 非同期レスポンスを許可
-});
-
-// インストール時の初期化
-chrome.runtime.onInstalled.addListener(() => {
-  console.log('[X Bookmark Exporter][SW] Extension installed');
+  return true;
 });
 
 async function handleMessage(
@@ -28,123 +16,96 @@ async function handleMessage(
   try {
     switch (message.type) {
       case 'BOOKMARKS_RECEIVED':
-        console.log('[X Bookmark Exporter][SW] Processing BOOKMARKS_RECEIVED');
-        await handleBookmarksReceived(message.payload as { posts: Post[] });
-        sendResponse({ success: true });
-        break;
-
-      case 'START_CAPTURE':
-        console.log('[X Bookmark Exporter][SW] Processing START_CAPTURE');
-        await handleStartCapture(message.payload as CaptureOptions);
-        sendResponse({ success: true });
-        break;
-
-      case 'STOP_CAPTURE':
-        console.log('[X Bookmark Exporter][SW] Processing STOP_CAPTURE');
-        state.stopCapture();
-        sendResponse({ success: true });
-        break;
-
-      case 'CAPTURE_STARTED':
-        console.log('[X Bookmark Exporter][SW] Processing CAPTURE_STARTED');
-        // Content Scriptからの通知
-        sendResponse({ success: true });
-        break;
-
-      case 'CAPTURE_COMPLETED':
-        console.log('[X Bookmark Exporter][SW] Processing CAPTURE_COMPLETED');
-        state.stopCapture();
-        // Popupに完了通知
-        chrome.runtime
-          .sendMessage({
-            type: 'CAPTURE_COMPLETED',
-            payload: state.getStatus(),
-          })
-          .catch(() => {}); // Popupが閉じている場合は無視
+        handleBookmarksReceived(message.payload as { posts: Post[] });
         sendResponse({ success: true });
         break;
 
       case 'GET_CAPTURE_STATUS':
-        const status = state.getStatus();
-        console.log('[X Bookmark Exporter][SW] GET_CAPTURE_STATUS response:', status);
-        sendResponse(status);
+        sendResponse({
+          count: store.getCount(),
+          oldestDate: store.getOldestDate(),
+        });
         break;
 
-      case 'GET_BOOKMARKS':
-        const bookmarks = store.getAllBookmarks();
-        sendResponse({ bookmarks });
+      case 'FETCH_MORE':
+        await handleFetchMore(message.payload as CaptureOptions);
+        sendResponse({ success: true });
         break;
 
       case 'EXPORT':
-        await handleExport(message.payload as { format: 'csv' | 'markdown' }, sendResponse);
+        await handleExport(
+          message.payload as { format: 'csv' | 'markdown'; options: CaptureOptions },
+          sendResponse
+        );
         break;
 
       case 'CLEAR_DATA':
         store.clear();
-        state.reset();
         sendResponse({ success: true });
         break;
 
       default:
-        console.log('[X Bookmark Exporter][SW] Unknown message type:', message.type);
         sendResponse({ error: 'Unknown message type' });
     }
   } catch (error) {
-    console.error('[X Bookmark Exporter][SW] Error handling message:', error);
     sendResponse({ error: String(error) });
   }
 }
 
-async function handleBookmarksReceived(payload: { posts: Post[] }): Promise<void> {
+function handleBookmarksReceived(payload: { posts: Post[] }): void {
   const { posts } = payload;
+  if (!posts || posts.length === 0) return;
 
-  if (!posts || posts.length === 0) {
-    return;
+  const newCount = store.addBookmarks(posts).length;
+
+  // Popupに進捗通知
+  if (newCount > 0) {
+    chrome.runtime
+      .sendMessage({
+        type: 'CAPTURE_PROGRESS',
+        payload: { count: store.getCount(), oldestDate: store.getOldestDate() },
+      })
+      .catch(() => {});
   }
-
-  // 重複を除いて保存
-  store.addBookmarks(posts);
 }
 
-async function handleStartCapture(options: CaptureOptions): Promise<void> {
-  console.log('[X Bookmark Exporter][SW] Starting capture with options:', options);
-  state.startCapture(options);
-
-  // アクティブタブにキャプチャ開始を指示
+async function handleFetchMore(options: CaptureOptions): Promise<void> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  console.log('[X Bookmark Exporter][SW] Active tab:', tab?.id, tab?.url);
-
   if (tab?.id) {
-    chrome.tabs.sendMessage(tab.id, { type: 'START_CAPTURE', payload: options }, (response) => {
-      console.log('[X Bookmark Exporter][SW] START_CAPTURE response from content:', response);
-    });
-  } else {
-    console.log('[X Bookmark Exporter][SW] No active tab found');
+    chrome.tabs.sendMessage(tab.id, { type: 'FETCH_MORE', payload: options });
   }
 }
 
 async function handleExport(
-  payload: { format: 'csv' | 'markdown' },
+  payload: { format: 'csv' | 'markdown'; options: CaptureOptions },
   sendResponse: (response: unknown) => void
 ): Promise<void> {
-  const bookmarks = store.getAllBookmarks();
+  let bookmarks = store.getAllBookmarks();
+
+  // オプションに基づいてフィルタリング
+  const { options } = payload;
+  if (options) {
+    if (options.mode === 'count' && options.count) {
+      bookmarks = bookmarks.slice(0, options.count);
+    } else if (options.mode === 'period' && options.startDate) {
+      const start = new Date(options.startDate);
+      const end = options.endDate ? new Date(options.endDate) : new Date();
+      bookmarks = bookmarks.filter((b) => {
+        const date = new Date(b.createdAt);
+        return date >= start && date <= end;
+      });
+    }
+    // mode === 'all' の場合はフィルタリングなし
+  }
 
   if (payload.format === 'csv') {
-    // CSVはファイルダウンロード
     const content = exportToCsv(bookmarks);
     const filename = `x-bookmarks-${Date.now()}.csv`;
-    const mimeType = 'text/csv;charset=utf-8';
-    const dataUrl = `data:${mimeType},${encodeURIComponent(content)}`;
+    const dataUrl = `data:text/csv;charset=utf-8,${encodeURIComponent(content)}`;
 
-    await chrome.downloads.download({
-      url: dataUrl,
-      filename,
-      saveAs: true,
-    });
-
+    await chrome.downloads.download({ url: dataUrl, filename, saveAs: true });
     sendResponse({ success: true, filename });
   } else {
-    // Markdownはクリップボードにコピー（Popup側で処理）
     const content = exportToMarkdown(bookmarks);
     sendResponse({ success: true, clipboard: true, content, count: bookmarks.length });
   }

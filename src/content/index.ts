@@ -22,3 +22,27 @@ window.addEventListener('message', (event) => {
     payload: event.data.payload,
   });
 });
+
+// Service Workerからのメッセージを受信
+chrome.runtime.onMessage.addListener((message) => {
+  if (message.type === 'FETCH_MORE') {
+    // ページをスクロールして追加データを取得
+    scrollToLoadMore();
+  }
+});
+
+// スクロールして追加データを読み込む
+function scrollToLoadMore(): void {
+  const scrollStep = window.innerHeight;
+  let scrollCount = 0;
+  const maxScrolls = 10;
+
+  const interval = setInterval(() => {
+    window.scrollBy(0, scrollStep);
+    scrollCount++;
+
+    if (scrollCount >= maxScrolls) {
+      clearInterval(interval);
+    }
+  }, 500);
+}
