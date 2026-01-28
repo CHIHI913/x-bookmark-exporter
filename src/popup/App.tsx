@@ -7,7 +7,7 @@ export function App() {
   const [status, setStatus] = useState<CaptureStatus | null>(null);
   const [options, setOptions] = useState<CaptureOptions>({
     mode: 'count',
-    count: 10,
+    count: 20,
   });
   const [message, setMessage] = useState<string | null>(null);
 

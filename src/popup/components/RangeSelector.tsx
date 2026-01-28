@@ -38,7 +38,7 @@ export function RangeSelector({ value, onChange, disabled }: Props) {
             type="radio"
             name="mode"
             checked={value.mode === 'count'}
-            onChange={() => onChange({ mode: 'count', count: 100 })}
+            onChange={() => onChange({ mode: 'count', count: 20 })}
             disabled={disabled}
           />
           件数指定
@@ -70,7 +70,7 @@ export function RangeSelector({ value, onChange, disabled }: Props) {
               type="number"
               min="1"
               max="10000"
-              value={value.count ?? 100}
+              value={value.count ?? 20}
               onChange={(e) =>
                 onChange({
                   ...value,
