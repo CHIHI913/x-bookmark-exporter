@@ -2,6 +2,9 @@ import { store } from '@/lib/store';
 import { exportToCsv, exportToMarkdown } from '@/lib/exporter';
 import { Post, CaptureOptions } from '@/lib/types';
 
+const DEFAULT_LIMIT = 10;
+let targetCount: number | null = null; // 目標件数（FETCH_MORE時に設定）
+
 // メッセージハンドラ登録
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   handleMessage(message, sender, sendResponse);
@@ -53,8 +56,19 @@ async function handleMessage(
 }
 
 function handleBookmarksReceived(payload: { posts: Post[] }): void {
-  const { posts } = payload;
+  let { posts } = payload;
   if (!posts || posts.length === 0) return;
+
+  // 件数制限を適用
+  const limit = targetCount ?? DEFAULT_LIMIT;
+  const currentCount = store.getCount();
+  const remaining = limit - currentCount;
+
+  if (remaining <= 0) return;
+
+  if (posts.length > remaining) {
+    posts = posts.slice(0, remaining);
+  }
 
   const newCount = store.addBookmarks(posts).length;
 
@@ -70,6 +84,15 @@ function handleBookmarksReceived(payload: { posts: Post[] }): void {
 }
 
 async function handleFetchMore(options: CaptureOptions): Promise<void> {
+  // 目標件数を設定
+  if (options.mode === 'count' && options.count) {
+    targetCount = options.count;
+  } else if (options.mode === 'all') {
+    targetCount = 10000; // 全件取得の場合は大きな数を設定
+  } else {
+    targetCount = null;
+  }
+
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (tab?.id) {
     chrome.tabs.sendMessage(tab.id, { type: 'FETCH_MORE', payload: options });

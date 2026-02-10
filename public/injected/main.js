@@ -143,8 +143,8 @@
       const user = raw.core?.user_results?.result;
       const username = user?.core?.screen_name ?? '';
 
-      // 引用元のURLを取得
-      const quotedUrl = extractQuotedUrl(raw);
+      // 引用元ポストを取得（再帰的にネスト）
+      const quoted = extractQuoted(raw);
 
       return {
         id: raw.rest_id,
@@ -154,7 +154,7 @@
         username: username,
         displayName: user?.core?.name ?? '',
         url: 'https://x.com/' + username + '/status/' + raw.rest_id,
-        quotedUrl: quotedUrl,
+        quoted: quoted,
         metrics: {
           likes: raw.legacy.favorite_count ?? 0,
           reposts: raw.legacy.retweet_count ?? 0,
@@ -169,7 +169,7 @@
     }
   }
 
-  function extractQuotedUrl(post) {
+  function extractQuoted(post) {
     try {
       const quoted = post.quoted_status_result?.result;
       if (!quoted) return null;
@@ -185,10 +185,25 @@
       const quotedUsername = quotedUser?.core?.screen_name ?? quotedUser?.legacy?.screen_name;
       const quotedId = quotedTweet.rest_id;
 
-      if (quotedUsername && quotedId) {
-        return 'https://x.com/' + quotedUsername + '/status/' + quotedId;
-      }
-      return null;
+      if (!quotedUsername || !quotedId) return null;
+
+      return {
+        id: quotedId,
+        url: 'https://x.com/' + quotedUsername + '/status/' + quotedId,
+        text: quotedTweet.note_tweet?.note_tweet_results?.result?.text ?? quotedTweet.legacy.full_text,
+        createdAt: new Date(quotedTweet.legacy.created_at).toISOString(),
+        username: quotedUsername,
+        displayName: quotedUser?.core?.name ?? quotedUser?.legacy?.name ?? '',
+        metrics: {
+          likes: quotedTweet.legacy.favorite_count ?? 0,
+          reposts: quotedTweet.legacy.retweet_count ?? 0,
+          replies: quotedTweet.legacy.reply_count ?? 0,
+          bookmarks: quotedTweet.legacy.bookmark_count ?? 0,
+          views: parseInt(quotedTweet.views?.count ?? '0', 10),
+        },
+        media: extractMedia(quotedTweet),
+        quoted: extractQuoted(quotedTweet),
+      };
     } catch (e) {
       return null;
     }
