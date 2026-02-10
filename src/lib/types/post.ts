@@ -1,3 +1,21 @@
+export interface QuotedPost {
+  id: string;
+  url: string;
+  text: string;
+  createdAt: string;
+  username: string;
+  displayName: string;
+  metrics: {
+    likes: number;
+    reposts: number;
+    replies: number;
+    bookmarks: number;
+    views: number;
+  };
+  media: Media[];
+  quoted?: QuotedPost;
+}
+
 export interface Post {
   id: string;
   text: string;
@@ -6,7 +24,7 @@ export interface Post {
   username: string; // @なし
   displayName: string;
   url: string;
-  quotedUrl?: string; // 引用元のURL
+  quoted?: QuotedPost; // 引用元ポスト（再帰的にネスト）
   metrics: {
     likes: number;
     reposts: number;
